@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スクリーンショット・アノテーター</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="editor.css">
+</head>
+
+<body>
+  <div id="toolbar">
+    <!-- グループ1: 描画ツール -->
+    <div class="toolbar-group" id="toolGroup">
+      <button id="selectTool" class="tool-btn active" title="選択ツール (V)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M3 3 L17 10 L10 11 L8 17 Z" fill="currentColor" />
+        </svg>
+      </button>
+      <button id="textTool" class="tool-btn" title="テキスト (T)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <text x="5" y="15" font-size="16" fill="currentColor" font-weight="bold">T</text>
+        </svg>
+      </button>
+      <button id="stepTool" class="tool-btn" title="ステップマーカー">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+          <text x="10" y="14" font-size="11" text-anchor="middle" fill="currentColor" font-weight="bold">1</text>
+        </svg>
+      </button>
+      <button id="rectTool" class="tool-btn" title="枠線（四角形） (R)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </button>
+      <button id="ellipseTool" class="tool-btn" title="円・楕円 (C)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <ellipse cx="10" cy="10" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </button>
+      <button id="arrowTool" class="tool-btn" title="矢印 (A)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M3 10 L15 10 M15 10 L11 6 M15 10 L11 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button id="mosaicTool" class="tool-btn" title="モザイク (M)">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="2" y="2" width="7" height="7" rx="1" fill="currentColor" opacity="0.6" />
+          <rect x="11" y="2" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
+          <rect x="2" y="11" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
+          <rect x="11" y="11" width="7" height="7" rx="1" fill="currentColor" opacity="0.6" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- グループ2: プロパティ -->
+    <div class="toolbar-group" id="propertyGroup">
+      <div class="color-preset-container">
+        <label class="color-label">色:</label>
+        <div class="color-presets">
+          <button class="color-preset" data-color="#FF0000" style="background-color: #FF0000;" title="赤"></button>
+          <button class="color-preset" data-color="#FFFFFF" style="background-color: #FFFFFF; border: 1px solid #ccc;" title="白"></button>
+          <button class="color-preset" data-color="#333333" style="background-color: #333333;" title="黒"></button>
+          <button class="color-preset gradient" id="gradientPresetBtn" data-gradient="true" style="background: linear-gradient(45deg, #4285F4, #ff52df);" title="グラデーション"></button>
+        </div>
+        <input type="color" id="colorPicker" class="color-picker" title="カスタムカラー">
+        <div id="gradientSettings" style="display: none; align-items: center; margin-left: 10px; gap: 5px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 10px;">
+          <span style="font-size: 11px; color: white;">Start</span>
+          <input type="color" id="gradientStartPicker" class="color-picker small" value="#4285F4" title="開始色">
+          <span style="font-size: 11px; color: white;">End</span>
+          <input type="color" id="gradientEndPicker" class="color-picker small" value="#ff52df" title="終了色">
+        </div>
+      </div>
+
+      <div class="prop-separator"></div>
+
+      <label class="fill-toggle" id="fillToggleLabel" title="ONにすると図形（四角形・円）を選択した色で塗りつぶします">
+        <input type="checkbox" id="fillToggle">
+        <span class="fill-toggle-slider"></span>
+        <span class="fill-toggle-label">塗りつぶし</span>
+      </label>
+
+      <div class="prop-separator"></div>
+
+      <label class="thickness-label" id="thicknessGroup">
+        <span class="slider-label-text">太さ:</span>
+        <input type="range" id="thicknessPicker" min="1" max="10" value="3">
+        <span id="thicknessValue">3</span>
+      </label>
+
+      <div class="prop-separator"></div>
+
+      <label class="font-size-label" id="fontSizeGroup">
+        <span class="slider-label-text" id="fontSizeLabelText">フォント:</span>
+        <input type="range" id="fontSizePicker" min="0" max="10" value="5">
+        <span id="fontSizeValue">24</span>
+      </label>
+
+      <div class="prop-separator"></div>
+
+      <div class="canvas-size-container">
+        <label class="canvas-size-label">サイズ:</label>
+        <select id="canvasSizeSelect" class="canvas-size-select">
+          <option value="free" style="color: black;">Full</option>
+          <option value="16:9" style="color: black;">16:9</option>
+          <option value="4:3" style="color: black;">4:3</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- グループ3: 履歴 + レイヤー -->
+    <div class="toolbar-group" id="historyLayerGroup">
+      <button id="undoBtn" class="action-btn icon-only" title="元に戻す (Ctrl+Z)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M4 8L2 6L4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 6H11C13.2 6 15 7.8 15 10C15 12.2 13.2 14 11 14H7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="redoBtn" class="action-btn icon-only" title="やり直し (Ctrl+Y)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M14 8L16 6L14 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 6H7C4.8 6 3 7.8 3 10C3 12.2 4.8 14 7 14H11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="prop-separator"></div>
+
+      <div id="layerButtons" class="layer-buttons layer-disabled">
+        <button id="bringToTopBtn" class="action-btn icon-only layer-action" title="最前面に移動">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2L13 7H10V10H6V7H3L8 2Z" fill="currentColor"/>
+            <line x1="3" y1="13" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="bringToFrontBtn" class="action-btn icon-only layer-action" title="前面に移動">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 4L12 8H9V13H7V8H4L8 4Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="sendToBackBtn" class="action-btn icon-only layer-action" title="背面に移動">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 12L4 8H7V3H9V8H12L8 12Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="sendToBottomBtn" class="action-btn icon-only layer-action" title="最背面に移動">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 14L3 9H6V6H10V9H13L8 14Z" fill="currentColor"/>
+            <line x1="3" y1="3" x2="13" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- グループ4: アクション -->
+    <div class="toolbar-group" id="actionGroup">
+      <button id="importBtn" class="action-btn icon-only" title="画像を追加">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 13V3C2 2.4 2.4 2 3 2H13C13.6 2 14 2.4 14 3V13C14 13.6 13.6 14 13 14H3C2.4 14 2 13.6 2 13Z" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="5.5" cy="5.5" r="1.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M2 11L5 8L7 10L10 7L14 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button id="saveBtn" class="action-btn icon-only primary" title="PNG保存 (Ctrl+S)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M12.7 2H3.3C2.6 2 2 2.6 2 3.3V12.7C2 13.4 2.6 14 3.3 14H12.7C13.4 14 14 13.4 14 12.7V5.3L10.7 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M11 14V9H5V14" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M5 2V5H9" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </button>
+      <button id="copyBtn" class="action-btn icon-only" title="クリップボードにコピー (Ctrl+C)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 5V3.5C11 2.7 10.3 2 9.5 2H3.5C2.7 2 2 2.7 2 3.5V9.5C2 10.3 2.7 11 3.5 11H5" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </button>
+      <label class="crop-toggle" title="ONにすると保存/コピー時にトリミング範囲を指定できます">
+        <input type="checkbox" id="cropToggle">
+        <span class="crop-toggle-slider"></span>
+        <span class="crop-toggle-label">範囲指定</span>
+      </label>
+      <button id="clearBtn" class="action-btn icon-only danger" title="すべてクリア">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 4H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M6 4V2.5C6 2.2 6.2 2 6.5 2H9.5C9.8 2 10 2.2 10 2.5V4" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M4 4L4.7 13.1C4.8 13.6 5.2 14 5.7 14H10.3C10.8 14 11.2 13.6 11.3 13.1L12 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 7V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M9 7V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="prop-separator"></div>
+      <button id="helpBtn" class="help-btn" title="使い方">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <path d="M6 6.5C6 5.4 6.9 4.5 8 4.5C9.1 4.5 10 5.4 10 6.5C10 7.3 9.5 7.9 8.8 8.2C8.3 8.4 8 8.8 8 9.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="8" cy="11.5" r="0.8" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+
+
+  </div>
+
+  <div id="canvasContainer">
+    <canvas id="mainCanvas"></canvas>
+
+    <!-- レイヤー操作パネルはツールバーに移動済み -->
+
+    <!-- 動画コントロール -->
+    <div id="videoControls" class="video-controls" style="display: none;">
+      <div class="video-controls-header">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: middle; margin-right: 4px;">
+          <rect x="1" y="3" width="9" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10 5.5L13 4V10L10 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>動画コントロール</span>
+      </div>
+      <div class="video-seek-container">
+        <span id="videoCurrentTime" class="video-time">0:00</span>
+        <input type="range" id="videoSeekBar" class="video-seek-bar" min="0" max="100" value="0">
+        <span id="videoDuration" class="video-time">0:00</span>
+      </div>
+      <div class="video-controls-buttons">
+        <button id="videoPlayPauseBtn" class="video-ctrl-btn" title="再生/停止">
+          <svg class="video-icon-svg play-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 2L12 7L4 12V2Z" fill="currentColor"/></svg>
+          <svg class="video-icon-svg pause-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" style="display:none;"><rect x="3" y="2" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="8" y="2" width="3" height="10" rx="0.5" fill="currentColor"/></svg>
+          <span class="video-text">再生</span>
+        </button>
+        <button id="videoMuteBtn" class="video-ctrl-btn" title="ミュート切替">
+          <svg class="video-icon-svg mute-off-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 5H4L7 2V12L4 9H2C1.4 9 1 8.6 1 8V6C1 5.4 1.4 5 2 5Z" fill="currentColor"/><path d="M10 4.5C11.3 5.8 11.3 8.2 10 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11.5 3C13.5 5 13.5 9 11.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg class="video-icon-svg mute-on-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" style="display:none;"><path d="M2 5H4L7 2V12L4 9H2C1.4 9 1 8.6 1 8V6C1 5.4 1.4 5 2 5Z" fill="currentColor"/><path d="M10 5L13 9M13 5L10 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="video-text">音声ON</span>
+        </button>
+        <button id="videoLoopBtn" class="video-ctrl-btn active" title="ループ切替">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 4H4C2.9 4 2 4.9 2 6V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3 10H10C11.1 10 12 9.1 12 8V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 2L11 4L9 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 8L3 10L5 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="video-text">ループ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextMenu" class="context-menu hidden">
+    <button id="deleteObject">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: middle; margin-right: 6px;"><path d="M2.5 3.5H11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 3.5V2.5C5 2.2 5.2 2 5.5 2H8.5C8.8 2 9 2.2 9 2.5V3.5" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 3.5L4 11.5C4 11.8 4.2 12 4.5 12H9.5C9.8 12 10 11.8 10 11.5L10.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      削除
+    </button>
+    <button id="bringToFront">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: middle; margin-right: 6px;"><path d="M7 2L12 7H9V12H5V7H2L7 2Z" fill="currentColor" opacity="0.6"/></svg>
+      最前面へ
+    </button>
+    <button id="sendToBack">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: middle; margin-right: 6px;"><path d="M7 12L2 7H5V2H9V7H12L7 12Z" fill="currentColor" opacity="0.6"/></svg>
+      最背面へ
+    </button>
+  </div>
+
+  <div id="textInput" class="text-input hidden">
+    <input type="text" id="textInputField" placeholder="テキストを入力...">
+    <button id="textInputOk">OK</button>
+    <button id="textInputCancel">キャンセル</button>
+  </div>
+
+  <div id="saveDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <h3>ファイル名を入力</h3>
+      <input type="text" id="filenameInput" placeholder="screenshot" value="screenshot">
+      <div class="dialog-buttons">
+        <button id="saveDialogOk" class="primary">保存</button>
+        <button id="saveDialogCancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas Size Change Confirmation Modal -->
+  <div id="canvasSizeModal" class="help-modal">
+    <div class="help-modal-overlay"></div>
+    <div class="help-content" style="max-width: 500px;">
+      <div class="help-header">
+        <h3>キャンバスサイズ変更の確認</h3>
+        <button class="help-close" id="canvasSizeModalClose">&times;</button>
+      </div>
+      <div class="help-body">
+        <p style="margin: 20px 0; line-height: 1.6;">
+          キャンバスサイズを変更すると、<strong>すべてのオブジェクト（画像、テキスト、図形など）がクリアされます</strong>。
+        </p>
+        <p style="margin: 20px 0; line-height: 1.6; color: #666;">
+          この操作は元に戻せません。続行してもよろしいですか？
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px;">
+          <button id="canvasSizeModalCancel"
+            style="padding: 10px 20px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; font-size: 14px;">
+            キャンセル
+          </button>
+          <button id="canvasSizeModalConfirm"
+            style="padding: 10px 20px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+            変更する
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- トリミングモーダル -->
+  <div id="cropModal" class="help-modal">
+    <div class="help-modal-overlay"></div>
+    <div class="help-content crop-modal-content">
+      <div class="help-header">
+        <h3>範囲を指定して出力</h3>
+        <button class="help-close" id="cropModalClose">&times;</button>
+      </div>
+      <div class="crop-modal-body">
+        <div class="crop-preview-container">
+          <canvas id="cropPreviewCanvas"></canvas>
+          <div id="cropSelection" class="crop-selection">
+            <div class="crop-handle nw" data-handle="nw"></div>
+            <div class="crop-handle ne" data-handle="ne"></div>
+            <div class="crop-handle sw" data-handle="sw"></div>
+            <div class="crop-handle se" data-handle="se"></div>
+            <div class="crop-handle n" data-handle="n"></div>
+            <div class="crop-handle s" data-handle="s"></div>
+            <div class="crop-handle e" data-handle="e"></div>
+            <div class="crop-handle w" data-handle="w"></div>
+          </div>
+          <div id="cropDimOverlay" class="crop-dim-overlay"></div>
+        </div>
+        <div class="crop-info">
+          <span id="cropSizeInfo">0 x 0 px</span>
+        </div>
+        <div class="crop-modal-actions">
+          <button id="cropResetBtn" class="crop-action-btn secondary">自動検出にリセット</button>
+          <button id="cropSaveBtn" class="crop-action-btn primary">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M12.7 2H3.3C2.6 2 2 2.6 2 3.3V12.7C2 13.4 2.6 14 3.3 14H12.7C13.4 14 14 13.4 14 12.7V5.3L10.7 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M11 14V9H5V14" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 2V5H9" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            保存
+          </button>
+          <button id="cropCopyBtn" class="crop-action-btn primary">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M11 5V3.5C11 2.7 10.3 2 9.5 2H3.5C2.7 2 2 2.7 2 3.5V9.5C2 10.3 2.7 11 3.5 11H5" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            コピー
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヘルプモーダル -->
+  <div id="helpModal" class="help-modal">
+    <div class="help-modal-overlay"></div>
+    <div class="help-content">
+      <div class="help-header">
+        <h3 id="help-title">Screenshot Annotator 使い方</h3>
+        <button class="help-close">&times;</button>
+      </div>
+      <div id="help-body" class="help-body">
+      </div>
+    </div>
+  </div>
+
+  <!-- ファイル入力（非表示） -->
+  <input type="file" id="fileInput"
+    accept="image/png, image/jpeg, image/jpg, image/gif, image/webp, video/mp4, video/webm, video/ogg"
+    style="display: none;">
+
+  <!-- Fabric.js Local -->
+  <script src="fabric.min.js" defer></script>
+  <script src="editor.js" defer></script>
+</body>
+
+</html>
