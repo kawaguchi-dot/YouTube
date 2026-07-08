@@ -307,8 +307,6 @@ class ScreenshotAnnotator {
       });
     }
 
-    // ブランドロゴ: n マーク画像が読めない場合はテキストのみ表示にフォールバック
-    this.setupBrandLogo();
 
     document.querySelectorAll('.color-preset').forEach(preset => {
       preset.addEventListener('click', (e) => {
@@ -2315,14 +2313,6 @@ class ScreenshotAnnotator {
         'mosaicOriginalDataURL', 'mosaicOriginalWidth', 'mosaicOriginalHeight', 'mosaicIntensity']);
   }
 
-  // ブランドロゴ: n マーク画像 + テキスト。画像が読めない場合はテキストのみ表示
-  setupBrandLogo() {
-    const mark = document.getElementById('brandLogoMark');
-    if (!mark) return;
-    mark.addEventListener('error', () => {
-      mark.style.display = 'none';
-    });
-  }
 
   updateSelectedObjectFontSize() {
     const activeObject = this.canvas.getActiveObject();

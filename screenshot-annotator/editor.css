@@ -55,18 +55,10 @@ body {
 .brand-logo {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex-shrink: 0;
   height: 36px;
   padding: 0 10px 0 4px;
   margin-right: 2px;
-}
-
-.brand-logo-mark {
-  height: 30px;
-  width: auto;
-  object-fit: contain;
-  display: block;
 }
 
 .brand-logo-text {
