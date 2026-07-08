@@ -107,6 +107,7 @@ class ScreenshotAnnotator {
     this.isGradient = false;
     this.isFillEnabled = false; // 図形（四角形・円）を塗りつぶすかどうか
     this.rectCornerRadius = 8;  // 四角形の角丸半径（0で直角）
+    this.isMarkerStraight = false; // マーカーを水平・垂直の直線にするか
 
     this.stepCounter = 1;
 
@@ -292,6 +293,16 @@ class ScreenshotAnnotator {
       cornerToggle.addEventListener('change', (e) => {
         this.rectCornerRadius = e.target.checked ? 8 : 0;
         this.updateSelectedObjectCorner();
+        this.saveColorSettings();
+      });
+    }
+
+    const markerStraightToggle = document.getElementById('markerStraightToggle');
+    if (markerStraightToggle) {
+      markerStraightToggle.addEventListener('change', (e) => {
+        this.isMarkerStraight = e.target.checked;
+        // マーカー使用中なら描画方式を即切り替え（フリーハンド⇔直線）
+        if (this.currentTool === 'marker') this.enableMarkerMode();
         this.saveColorSettings();
       });
     }
@@ -603,8 +614,15 @@ class ScreenshotAnnotator {
         return;
       }
 
-      // マーカーは fabric のフリードローイングモードに任せる
-      if (this.currentTool === 'marker') return;
+      // マーカー: 直線モードは手動描画、フリーハンドは fabric に任せる
+      if (this.currentTool === 'marker') {
+        if (this.isMarkerStraight) {
+          this.startPoint = { x: pointer.x, y: pointer.y };
+          this.isDrawing = true;
+          this.startDrawingMarkerLine(pointer);
+        }
+        return;
+      }
 
       if (this.currentTool === 'select') return;
 
@@ -640,6 +658,8 @@ class ScreenshotAnnotator {
         this.updateDrawingEllipse(pointer);
       } else if (this.currentTool === 'arrow' && this.drawingObject) {
         this.updateDrawingArrow(pointer);
+      } else if (this.currentTool === 'marker' && this.isMarkerStraight && this.drawingObject) {
+        this.updateDrawingMarkerLine(pointer);
       } else if (this.currentTool === 'mosaic' && this.drawingObject) {
         this.updateDrawingMosaic(pointer);
       }
@@ -655,6 +675,8 @@ class ScreenshotAnnotator {
           this.applyMosaic();
         } else if (this.currentTool === 'arrow') {
           this.finishArrow();
+        } else if (this.currentTool === 'marker') {
+          this.finishMarkerLine();
         } else {
           const obj = this.drawingObject;
           // ドラッグせずにクリックしただけの極小図形は誤操作とみなして破棄
@@ -876,6 +898,12 @@ class ScreenshotAnnotator {
       const cornerRelevant = (tool === 'rect' || tool === 'select');
       cornerToggleLabel.classList.toggle('context-disabled', !cornerRelevant);
     }
+
+    // 直線（水平/垂直）トグル: マーカーツールでのみ有効化
+    const markerStraightLabel = document.getElementById('markerStraightToggleLabel');
+    if (markerStraightLabel) {
+      markerStraightLabel.classList.toggle('context-disabled', tool !== 'marker');
+    }
   }
 
   setTool(tool) {
@@ -919,8 +947,13 @@ class ScreenshotAnnotator {
     this.updateContextAwareUI();
   }
 
-  // マーカー（フリーハンド描画）モードを有効化しブラシを設定
+  // マーカーモードを有効化。直線モードなら独自ハンドラで水平/垂直の線を描く
   enableMarkerMode() {
+    if (this.isMarkerStraight) {
+      // 直線（水平/垂直）モード: fabric のフリードローイングは使わず手動描画
+      this.canvas.isDrawingMode = false;
+      return;
+    }
     this.canvas.isDrawingMode = true;
     if (!this.canvas.freeDrawingBrush) {
       this.canvas.freeDrawingBrush = new fabric.PencilBrush(this.canvas);
@@ -937,6 +970,87 @@ class ScreenshotAnnotator {
     brush.width = this.currentThickness;
     if ('strokeLineCap' in brush) brush.strokeLineCap = 'round';
     if ('strokeLineJoin' in brush) brush.strokeLineJoin = 'round';
+  }
+
+  // 直線マーカー（水平/垂直）の色を取得
+  getMarkerLineColor() {
+    return this.isGradient ? this.gradientStartColor : this.currentColor;
+  }
+
+  startDrawingMarkerLine(pointer) {
+    this.drawingObject = new fabric.Line(
+      [pointer.x, pointer.y, pointer.x, pointer.y],
+      {
+        stroke: this.getMarkerLineColor(),
+        strokeWidth: this.currentThickness,
+        strokeLineCap: 'round',
+        strokeUniform: true,
+        selectable: false,
+        evented: false,
+        isMarker: true
+      }
+    );
+    this.canvas.add(this.drawingObject);
+  }
+
+  updateDrawingMarkerLine(pointer) {
+    if (!this.drawingObject || !this.startPoint) return;
+
+    const dx = pointer.x - this.startPoint.x;
+    const dy = pointer.y - this.startPoint.y;
+
+    // ドラッグ方向が横に長ければ水平、縦に長ければ垂直にスナップ
+    let x2, y2;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      x2 = pointer.x;
+      y2 = this.startPoint.y;
+    } else {
+      x2 = this.startPoint.x;
+      y2 = pointer.y;
+    }
+
+    // fabric.Line は座標変更後の境界更新のため作り直す（矢印と同方式）
+    this.canvas.remove(this.drawingObject);
+    this.drawingObject = new fabric.Line(
+      [this.startPoint.x, this.startPoint.y, x2, y2],
+      {
+        stroke: this.getMarkerLineColor(),
+        strokeWidth: this.currentThickness,
+        strokeLineCap: 'round',
+        strokeUniform: true,
+        selectable: false,
+        evented: false,
+        isMarker: true
+      }
+    );
+    this.canvas.add(this.drawingObject);
+    this.canvas.renderAll();
+  }
+
+  finishMarkerLine() {
+    if (!this.drawingObject) return;
+    const line = this.drawingObject;
+
+    // クリックのみ（極小）の線は破棄
+    const len = Math.hypot((line.x2 - line.x1), (line.y2 - line.y1));
+    if (len < 3) {
+      this.canvas.remove(line);
+      this.canvas.renderAll();
+      this.drawingObject = null;
+      return;
+    }
+
+    const inSelect = this.currentTool === 'select';
+    line.set({
+      selectable: inSelect,
+      evented: inSelect,
+      hasControls: true,
+      hasBorders: true
+    });
+    this.canvas.renderAll();
+    this.drawingObject = null;
+    this.saveState();
+    // マーカーツールは継続（select には切り替えない）
   }
 
   addStepMarker(x, y) {
@@ -2454,6 +2568,7 @@ class ScreenshotAnnotator {
           isGradient: this.isGradient,
           isFillEnabled: this.isFillEnabled,
           rectCornerRadius: this.rectCornerRadius,
+          isMarkerStraight: this.isMarkerStraight,
           gradientStartColor: this.gradientStartColor,
           gradientEndColor: this.gradientEndColor,
           cropToggleOn: cropToggle ? cropToggle.checked : false,
@@ -2481,6 +2596,7 @@ class ScreenshotAnnotator {
         if (typeof result.colorSettings.rectCornerRadius === 'number') {
           this.rectCornerRadius = result.colorSettings.rectCornerRadius;
         }
+        this.isMarkerStraight = result.colorSettings.isMarkerStraight || false;
         this.gradientStartColor = result.colorSettings.gradientStartColor || '#4285F4';
         this.gradientEndColor = result.colorSettings.gradientEndColor || '#ff52df';
 
@@ -2489,6 +2605,9 @@ class ScreenshotAnnotator {
 
         const cornerToggle = document.getElementById('cornerToggle');
         if (cornerToggle) cornerToggle.checked = this.rectCornerRadius > 0;
+
+        const markerStraightToggle = document.getElementById('markerStraightToggle');
+        if (markerStraightToggle) markerStraightToggle.checked = this.isMarkerStraight;
 
         const startPicker = document.getElementById('gradientStartPicker');
         const endPicker = document.getElementById('gradientEndPicker');
@@ -3150,7 +3269,7 @@ function showHelpModal() {
     '<li><strong>枠線（四角形） (R)</strong>: 四角形を描画</li>',
     '<li><strong>円・楕円 (C)</strong>: 円・楕円を描画</li>',
     '<li><strong>矢印 (A)</strong>: 矢印を描画</li>',
-    '<li><strong>マーカー (P)</strong>: フリーハンドで線を描画（太さ・色を変更可能）</li>',
+    '<li><strong>マーカー (P)</strong>: フリーハンドで線を描画（太さ・色を変更可能）。「直線」トグルをONにすると水平・垂直の直線になります。</li>',
     '<li><strong>モザイク (M)</strong>: モザイク効果を適用</li>',
     '<li><strong>ステップマーカー</strong>: クリックで連番（①, ②...）を追加</li>',
     '</ul>',
@@ -3171,6 +3290,7 @@ function showHelpModal() {
     '<li><strong>色選択</strong>: プリセット色またはカスタムカラー</li>',
     '<li><strong>塗りつぶし</strong>: ONにすると図形（四角形・円）を選択した色で塗りつぶします。選択中の図形にも即時反映されます。</li>',
     '<li><strong>角丸</strong>: 四角形の角を「丸角」と「直角」で切り替えます。選択中の四角形にも反映されます。</li>',
+    '<li><strong>直線</strong>: マーカーツール選択時に表示。ONにするとマーカーが水平・垂直の直線になります（ドラッグ方向で自動判定）。</li>',
     '<li><strong>太さ</strong>: 線の太さを1-10で調整</li>',
     '<li><strong>フォント</strong>: テキストサイズを調整</li>',
     '<li><strong>グラデーション</strong>: カラフルなグラデーション効果</li>',
