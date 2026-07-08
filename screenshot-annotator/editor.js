@@ -106,6 +106,7 @@ class ScreenshotAnnotator {
     this.currentFontSize = 24;
     this.isGradient = false;
     this.isFillEnabled = false; // 図形（四角形・円）を塗りつぶすかどうか
+    this.rectCornerRadius = 8;  // 四角形の角丸半径（0で直角）
 
     this.stepCounter = 1;
 
@@ -274,6 +275,7 @@ class ScreenshotAnnotator {
     document.getElementById('rectTool').addEventListener('click', () => this.setTool('rect'));
     document.getElementById('ellipseTool').addEventListener('click', () => this.setTool('ellipse'));
     document.getElementById('arrowTool').addEventListener('click', () => this.setTool('arrow'));
+    document.getElementById('markerTool').addEventListener('click', () => this.setTool('marker'));
     document.getElementById('mosaicTool').addEventListener('click', () => this.setTool('mosaic'));
 
     const fillToggle = document.getElementById('fillToggle');
@@ -284,6 +286,18 @@ class ScreenshotAnnotator {
         this.saveColorSettings();
       });
     }
+
+    const cornerToggle = document.getElementById('cornerToggle');
+    if (cornerToggle) {
+      cornerToggle.addEventListener('change', (e) => {
+        this.rectCornerRadius = e.target.checked ? 8 : 0;
+        this.updateSelectedObjectCorner();
+        this.saveColorSettings();
+      });
+    }
+
+    // ブランドロゴ: icons/logo.png があれば画像、無ければ Nextstep のテキスト表示
+    this.setupBrandLogo();
 
     document.querySelectorAll('.color-preset').forEach(preset => {
       preset.addEventListener('click', (e) => {
@@ -331,6 +345,7 @@ class ScreenshotAnnotator {
       document.getElementById('thicknessValue').textContent = this.currentThickness;
       this.updateThicknessSliderBackground(e.target);
       this.updateSelectedObjectThickness();
+      if (this.currentTool === 'marker') this.updateMarkerBrush();
       this.saveColorSettings();
     });
 
@@ -497,6 +512,13 @@ class ScreenshotAnnotator {
         return;
       }
 
+      // Ctrl+D: 選択オブジェクトを複製（テキストボックスもコピー可能）
+      if (isCtrl && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        this.duplicateSelected();
+        return;
+      }
+
       if (e.key === 'Escape' && this.isTextEditing) {
         this.finishTextEditing();
         return;
@@ -525,6 +547,10 @@ class ScreenshotAnnotator {
             e.preventDefault();
             this.setTool('arrow');
             break;
+          case 'p':
+            e.preventDefault();
+            this.setTool('marker');
+            break;
           case 'm':
             e.preventDefault();
             this.setTool('mosaic');
@@ -533,6 +559,10 @@ class ScreenshotAnnotator {
       }
     });
 
+    document.getElementById('duplicateObject').addEventListener('click', () => {
+      this.duplicateSelected();
+      this.hideContextMenu();
+    });
     document.getElementById('deleteObject').addEventListener('click', () => {
       this.deleteSelected();
       this.hideContextMenu();
@@ -573,6 +603,9 @@ class ScreenshotAnnotator {
         return;
       }
 
+      // マーカーは fabric のフリードローイングモードに任せる
+      if (this.currentTool === 'marker') return;
+
       if (this.currentTool === 'select') return;
 
       this.startPoint = { x: pointer.x, y: pointer.y };
@@ -591,8 +624,8 @@ class ScreenshotAnnotator {
 
     this.canvas.on('mouse:dblclick', (options) => {
       const activeObject = this.canvas.getActiveObject();
-      if (activeObject && activeObject.type === 'text') {
-        this.editTextObject(activeObject);
+      if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'text')) {
+        this.editTextObject(activeObject, options ? options.e : null);
       }
     });
 
@@ -660,6 +693,19 @@ class ScreenshotAnnotator {
     });
 
     this.canvas.on('object:modified', () => {
+      this.saveState();
+    });
+
+    // マーカー（フリーハンド）のストローク確定
+    this.canvas.on('path:created', (e) => {
+      const path = e.path;
+      if (!path) return;
+      path.isMarker = true;
+      path.selectable = this.currentTool === 'select';
+      path.evented = this.currentTool === 'select';
+      path.strokeLineCap = 'round';
+      path.strokeLineJoin = 'round';
+      this.canvas.renderAll();
       this.saveState();
     });
 
@@ -801,8 +847,8 @@ class ScreenshotAnnotator {
       thicknessGroup.classList.add('context-disabled');
       fontSizeGroup.classList.remove('context-disabled');
     }
-    // 矢印/四角形/円: フォントをグレーアウト
-    else if (tool === 'rect' || tool === 'ellipse' || tool === 'arrow') {
+    // 矢印/四角形/円/マーカー: フォントをグレーアウト
+    else if (tool === 'rect' || tool === 'ellipse' || tool === 'arrow' || tool === 'marker') {
       thicknessGroup.classList.remove('context-disabled');
       fontSizeGroup.classList.add('context-disabled');
     }
@@ -822,6 +868,13 @@ class ScreenshotAnnotator {
     if (fillToggleLabel) {
       const fillRelevant = (tool === 'rect' || tool === 'ellipse' || tool === 'select');
       fillToggleLabel.classList.toggle('context-disabled', !fillRelevant);
+    }
+
+    // 角丸トグル: 四角形ツールと選択ツール（四角形選択時）でのみ有効化
+    const cornerToggleLabel = document.getElementById('cornerToggleLabel');
+    if (cornerToggleLabel) {
+      const cornerRelevant = (tool === 'rect' || tool === 'select');
+      cornerToggleLabel.classList.toggle('context-disabled', !cornerRelevant);
     }
   }
 
@@ -855,8 +908,35 @@ class ScreenshotAnnotator {
       this.canvas.renderAll();
     }
 
+    // マーカー: fabric のフリードローイングモードを有効化
+    if (tool === 'marker') {
+      this.enableMarkerMode();
+    } else {
+      this.canvas.isDrawingMode = false;
+    }
+
     // [改善UI-3] ツール切替時にコンテキストアウェアUI更新
     this.updateContextAwareUI();
+  }
+
+  // マーカー（フリーハンド描画）モードを有効化しブラシを設定
+  enableMarkerMode() {
+    this.canvas.isDrawingMode = true;
+    if (!this.canvas.freeDrawingBrush) {
+      this.canvas.freeDrawingBrush = new fabric.PencilBrush(this.canvas);
+    }
+    this.updateMarkerBrush();
+  }
+
+  // ブラシの色・太さを現在の設定に合わせて更新
+  updateMarkerBrush() {
+    const brush = this.canvas.freeDrawingBrush;
+    if (!brush) return;
+    // グラデーションはブラシに適用できないため開始色でフォールバック
+    brush.color = this.isGradient ? this.gradientStartColor : this.currentColor;
+    brush.width = this.currentThickness;
+    if ('strokeLineCap' in brush) brush.strokeLineCap = 'round';
+    if ('strokeLineJoin' in brush) brush.strokeLineJoin = 'round';
   }
 
   addStepMarker(x, y) {
@@ -945,6 +1025,7 @@ class ScreenshotAnnotator {
     });
 
     this.updateSelectedObjectColor(targets);
+    if (this.currentTool === 'marker') this.updateMarkerBrush();
     this.saveColorSettings();
   }
 
@@ -1026,8 +1107,8 @@ class ScreenshotAnnotator {
         evented: false,
         strokeLineJoin: 'round',
         strokeLineCap: 'round',
-        rx: 8,
-        ry: 8
+        rx: this.rectCornerRadius,
+        ry: this.rectCornerRadius
       });
       this.canvas.add(this.drawingObject);
     } catch (error) {
@@ -1500,7 +1581,7 @@ class ScreenshotAnnotator {
     this.saveState();
   }
 
-  editTextObject(textObject) {
+  editTextObject(textObject, evt = null) {
     this.isTextEditing = true;
     this.editingTextObject = textObject;
 
@@ -1524,8 +1605,42 @@ class ScreenshotAnnotator {
       textObject.__editingExitedHandlerAttached = true;
     }
 
-    textObject.enterEditing();
-    textObject.selectAll();
+    if (!textObject.isEditing) {
+      textObject.enterEditing();
+    }
+
+    // クリック位置にカーソルを置く（取得できなければ末尾）
+    const textLen = textObject.text ? textObject.text.length : 0;
+    let caret = textLen;
+    if (evt && typeof textObject.getSelectionStartFromPointer === 'function') {
+      try {
+        caret = textObject.getSelectionStartFromPointer(evt);
+      } catch (e) {
+        caret = textLen;
+      }
+    }
+
+    // 日本語などスペース区切りが無いテキストでは、ダブルクリックで全文が
+    // 単語選択され、次の入力で全消えしてしまう。選択を解除しカーソルのみ置く。
+    const collapseSelection = () => {
+      textObject.selectionStart = caret;
+      textObject.selectionEnd = caret;
+      if (textObject.hiddenTextarea) {
+        textObject.hiddenTextarea.selectionStart = caret;
+        textObject.hiddenTextarea.selectionEnd = caret;
+      }
+      if (typeof textObject.setSelectionStart === 'function') {
+        textObject.setSelectionStart(caret);
+        textObject.setSelectionEnd(caret);
+      }
+      this.canvas.renderAll();
+    };
+
+    collapseSelection();
+    // fabric標準のダブルクリック単語選択が後から走るケースに備え、
+    // 次のイベントサイクルでも選択を解除しておく
+    setTimeout(collapseSelection, 0);
+
     this.canvas.renderAll();
   }
 
@@ -2020,6 +2135,92 @@ class ScreenshotAnnotator {
     }
   }
 
+  // 角丸トグルの変更を選択中の四角形に反映
+  updateSelectedObjectCorner() {
+    const activeObjects = this.canvas.getActiveObjects();
+    const targets = (activeObjects && activeObjects.length)
+      ? activeObjects
+      : (this.canvas.getActiveObject() ? [this.canvas.getActiveObject()] : []);
+
+    if (!targets.length) return;
+
+    let changed = false;
+    targets.forEach(obj => {
+      if (obj.type !== 'rect') return;
+      obj.set({ rx: this.rectCornerRadius, ry: this.rectCornerRadius });
+      obj.dirty = true;
+      changed = true;
+    });
+
+    if (changed) {
+      this.canvas.renderAll();
+      this.saveState();
+    }
+  }
+
+  // 選択オブジェクト（テキストボックス・図形など）を複製する
+  duplicateSelected() {
+    const active = this.canvas.getActiveObject();
+    if (!active) return;
+
+    const OFFSET = 20;
+
+    active.clone((cloned) => {
+      this.canvas.discardActiveObject();
+
+      if (cloned.type === 'activeSelection') {
+        // 複数選択の複製
+        cloned.canvas = this.canvas;
+        cloned.set({ left: cloned.left + OFFSET, top: cloned.top + OFFSET });
+        cloned.forEachObject((obj) => {
+          obj.selectable = true;
+          obj.evented = true;
+          this.canvas.add(obj);
+        });
+        cloned.setCoords();
+      } else {
+        cloned.set({
+          left: cloned.left + OFFSET,
+          top: cloned.top + OFFSET,
+          selectable: true,
+          evented: true
+        });
+        this.canvas.add(cloned);
+      }
+
+      // テキスト編集を確実に抜けた状態にする
+      if (cloned.type === 'i-text') {
+        cloned.isEditing = false;
+      }
+
+      this.canvas.setActiveObject(cloned);
+      this.canvas.requestRenderAll();
+      this.saveState();
+      this.showToast('複製しました');
+    }, ['selectable', 'evented', 'arrowStart', 'arrowEnd', 'isMosaic', 'isVideo', 'isMarker', 'isStepMarker',
+        'mosaicOriginalDataURL', 'mosaicOriginalWidth', 'mosaicOriginalHeight', 'mosaicIntensity']);
+  }
+
+  // ブランドロゴ: icons/logo.png があれば画像、無ければテキスト表示
+  setupBrandLogo() {
+    const logoImg = document.getElementById('brandLogoImg');
+    const logoText = document.getElementById('brandLogoText');
+    if (!logoImg) return;
+
+    const probe = new Image();
+    probe.onload = () => {
+      logoImg.src = 'icons/logo.png';
+      logoImg.style.display = 'block';
+      if (logoText) logoText.style.display = 'none';
+    };
+    probe.onerror = () => {
+      // ロゴ画像が無い場合はテキストワードマークのまま
+      logoImg.style.display = 'none';
+      if (logoText) logoText.style.display = 'block';
+    };
+    probe.src = 'icons/logo.png';
+  }
+
   updateSelectedObjectFontSize() {
     const activeObject = this.canvas.getActiveObject();
     const activeObjects = this.canvas.getActiveObjects();
@@ -2193,7 +2394,7 @@ class ScreenshotAnnotator {
     this.history = this.history.slice(0, this.historyStep + 1);
 
     // カスタムプロパティを含めてJSON化
-    const json = JSON.stringify(this.canvas.toJSON(['selectable', 'evented', 'arrowStart', 'arrowEnd', 'isMosaic', 'isVideo']));
+    const json = JSON.stringify(this.canvas.toJSON(['selectable', 'evented', 'arrowStart', 'arrowEnd', 'isMosaic', 'isVideo', 'isMarker', 'isStepMarker']));
     this.history.push(json);
     this.historyStep++;
 
@@ -2252,6 +2453,7 @@ class ScreenshotAnnotator {
           mosaicIntensity: this.mosaicIntensity,
           isGradient: this.isGradient,
           isFillEnabled: this.isFillEnabled,
+          rectCornerRadius: this.rectCornerRadius,
           gradientStartColor: this.gradientStartColor,
           gradientEndColor: this.gradientEndColor,
           cropToggleOn: cropToggle ? cropToggle.checked : false,
@@ -2276,11 +2478,17 @@ class ScreenshotAnnotator {
         }
         this.isGradient = result.colorSettings.isGradient || false;
         this.isFillEnabled = result.colorSettings.isFillEnabled || false;
+        if (typeof result.colorSettings.rectCornerRadius === 'number') {
+          this.rectCornerRadius = result.colorSettings.rectCornerRadius;
+        }
         this.gradientStartColor = result.colorSettings.gradientStartColor || '#4285F4';
         this.gradientEndColor = result.colorSettings.gradientEndColor || '#ff52df';
 
         const fillToggle = document.getElementById('fillToggle');
         if (fillToggle) fillToggle.checked = this.isFillEnabled;
+
+        const cornerToggle = document.getElementById('cornerToggle');
+        if (cornerToggle) cornerToggle.checked = this.rectCornerRadius > 0;
 
         const startPicker = document.getElementById('gradientStartPicker');
         const endPicker = document.getElementById('gradientEndPicker');
@@ -2942,8 +3150,14 @@ function showHelpModal() {
     '<li><strong>枠線（四角形） (R)</strong>: 四角形を描画</li>',
     '<li><strong>円・楕円 (C)</strong>: 円・楕円を描画</li>',
     '<li><strong>矢印 (A)</strong>: 矢印を描画</li>',
+    '<li><strong>マーカー (P)</strong>: フリーハンドで線を描画（太さ・色を変更可能）</li>',
     '<li><strong>モザイク (M)</strong>: モザイク効果を適用</li>',
     '<li><strong>ステップマーカー</strong>: クリックで連番（①, ②...）を追加</li>',
+    '</ul>',
+    '<h4>オブジェクトの編集</h4>',
+    '<ul>',
+    '<li><strong>テキストの書き換え</strong>: テキストをダブルクリックすると、その位置にカーソルが入り書き換えできます（全消えしません）。</li>',
+    '<li><strong>複製</strong>: オブジェクトを右クリック →「複製」、または <code>Ctrl+D</code>。テキストボックスもコピーできます。</li>',
     '</ul>',
     '<h4>動画コントロール</h4>',
     '<ul>',
@@ -2956,6 +3170,7 @@ function showHelpModal() {
     '<ul>',
     '<li><strong>色選択</strong>: プリセット色またはカスタムカラー</li>',
     '<li><strong>塗りつぶし</strong>: ONにすると図形（四角形・円）を選択した色で塗りつぶします。選択中の図形にも即時反映されます。</li>',
+    '<li><strong>角丸</strong>: 四角形の角を「丸角」と「直角」で切り替えます。選択中の四角形にも反映されます。</li>',
     '<li><strong>太さ</strong>: 線の太さを1-10で調整</li>',
     '<li><strong>フォント</strong>: テキストサイズを調整</li>',
     '<li><strong>グラデーション</strong>: カラフルなグラデーション効果</li>',
@@ -2981,9 +3196,11 @@ function showHelpModal() {
     '<li><code>R</code>: 枠線（四角形）ツール</li>',
     '<li><code>C</code>: 円・楕円ツール</li>',
     '<li><code>A</code>: 矢印ツール</li>',
+    '<li><code>P</code>: マーカーツール</li>',
     '<li><code>M</code>: モザイクツール</li>',
     '<li><code>Ctrl+Z</code>: 元に戻す</li>',
     '<li><code>Ctrl+Y</code>: やり直し</li>',
+    '<li><code>Ctrl+D</code>: 選択したオブジェクトを複製</li>',
     '<li><code>Delete</code>: 選択したオブジェクトを削除</li>',
     '<li><code>Escape</code>: テキスト編集を終了</li>',
     '</ul>'

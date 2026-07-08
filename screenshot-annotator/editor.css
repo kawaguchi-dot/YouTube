@@ -23,8 +23,9 @@ body {
 
 /* ===== ツールバー: 1行レイアウト ===== */
 #toolbar {
-  background: linear-gradient(90deg, #4285F4, #a16cea, #ff52df);
-  border-bottom: 1px solid rgba(255,255,255,0.2);
+  /* Nextstep ブランドカラー（イエロー系グラデーション） */
+  background: linear-gradient(90deg, #FFD400, #FFF315, #FFF89E);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
   padding: 6px 12px;
   display: flex;
   align-items: center;
@@ -46,8 +47,35 @@ body {
   height: 6px;
 }
 #toolbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 3px;
+}
+
+/* ===== ブランドロゴ（左端） ===== */
+.brand-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  margin-right: 2px;
+}
+
+.brand-logo-img {
+  height: 30px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-logo-text {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+  color: #1a1500;
+  white-space: nowrap;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* ===== グループパネル（グラスモーフィズム） ===== */
@@ -55,8 +83,8 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 10px;
   padding: 4px 8px;
   backdrop-filter: blur(8px);
@@ -68,7 +96,7 @@ body {
 .prop-separator {
   width: 1px;
   height: 20px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.15);
   margin: 0 2px;
   flex-shrink: 0;
 }
@@ -598,7 +626,7 @@ body {
   align-items: center;
   gap: 5px;
   font-size: 12px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
 }
 
@@ -608,7 +636,7 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
   transition: opacity 0.3s ease;
 }
@@ -631,7 +659,7 @@ body {
 .color-label {
   font-size: 11px;
   margin-right: 4px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
 }
 
@@ -762,7 +790,7 @@ body {
 #thicknessValue, #fontSizeValue {
   font-weight: bold;
   min-width: 18px;
-  color: white;
+  color: #4a3d00;
   font-size: 11px;
 }
 
@@ -775,17 +803,17 @@ body {
 .canvas-size-label {
   font-size: 11px;
   margin-right: 4px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
 }
 
 .canvas-size-select {
   padding: 3px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(0,0,0,0.15);
   font-size: 11px;
-  background: rgba(255,255,255,0.1);
-  color: white;
+  background: rgba(255,255,255,0.55);
+  color: #4a3d00;
   cursor: pointer;
   transition: all 0.2s;
   min-width: 55px;
@@ -1365,7 +1393,7 @@ canvas {
   position: relative;
   width: 28px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.22);
   border-radius: 9px;
   transition: all 0.3s;
   flex-shrink: 0;
@@ -1394,7 +1422,7 @@ canvas {
 
 .crop-toggle-label {
   font-size: 10px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1417,7 +1445,7 @@ canvas {
   position: relative;
   width: 28px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.22);
   border-radius: 9px;
   transition: all 0.3s;
   flex-shrink: 0;
@@ -1446,7 +1474,7 @@ canvas {
 
 .fill-toggle-label {
   font-size: 10px;
-  color: white;
+  color: #4a3d00;
   font-weight: 500;
   white-space: nowrap;
 }

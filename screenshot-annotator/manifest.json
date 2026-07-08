@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Screenshot Annotator",
-  "version": "2.1.0",
-  "description": "スクリーンショットに矢印・図形（四角形・円）・テキストを追加できる画像編集ツール",
+  "version": "2.2.0",
+  "description": "スクリーンショットに矢印・図形（四角形・円）・マーカー・テキストを追加できる画像編集ツール",
   "author": "まじん",
   "icons": {
     "16": "icons/icon16.png",
