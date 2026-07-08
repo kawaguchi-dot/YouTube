@@ -307,7 +307,7 @@ class ScreenshotAnnotator {
       });
     }
 
-    // ブランドロゴ: icons/logo.png があれば画像、無ければ Nextstep のテキスト表示
+    // ブランドロゴ: n マーク画像が読めない場合はテキストのみ表示にフォールバック
     this.setupBrandLogo();
 
     document.querySelectorAll('.color-preset').forEach(preset => {
@@ -2315,24 +2315,13 @@ class ScreenshotAnnotator {
         'mosaicOriginalDataURL', 'mosaicOriginalWidth', 'mosaicOriginalHeight', 'mosaicIntensity']);
   }
 
-  // ブランドロゴ: icons/logo.png があれば画像、無ければテキスト表示
+  // ブランドロゴ: n マーク画像 + テキスト。画像が読めない場合はテキストのみ表示
   setupBrandLogo() {
-    const logoImg = document.getElementById('brandLogoImg');
-    const logoText = document.getElementById('brandLogoText');
-    if (!logoImg) return;
-
-    const probe = new Image();
-    probe.onload = () => {
-      logoImg.src = 'icons/logo.png';
-      logoImg.style.display = 'block';
-      if (logoText) logoText.style.display = 'none';
-    };
-    probe.onerror = () => {
-      // ロゴ画像が無い場合はテキストワードマークのまま
-      logoImg.style.display = 'none';
-      if (logoText) logoText.style.display = 'block';
-    };
-    probe.src = 'icons/logo.png';
+    const mark = document.getElementById('brandLogoMark');
+    if (!mark) return;
+    mark.addEventListener('error', () => {
+      mark.style.display = 'none';
+    });
   }
 
   updateSelectedObjectFontSize() {
