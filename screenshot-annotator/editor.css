@@ -779,7 +779,38 @@ body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-#thicknessValue, #fontSizeValue {
+#markerOpacityPicker {
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: #ddd;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#markerOpacityPicker::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #5c5c5c;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#markerOpacityPicker::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #5c5c5c;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#thicknessValue, #fontSizeValue, #markerOpacityValue {
   font-weight: bold;
   min-width: 18px;
   color: #4a3d00;

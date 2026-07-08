@@ -108,6 +108,7 @@ class ScreenshotAnnotator {
     this.isFillEnabled = false; // 図形（四角形・円）を塗りつぶすかどうか
     this.rectCornerRadius = 8;  // 四角形の角丸半径（0で直角）
     this.isMarkerStraight = false; // マーカーを水平・垂直の直線にするか
+    this.markerOpacity = 1; // マーカーの不透明度（0〜1）
 
     this.stepCounter = 1;
 
@@ -303,6 +304,25 @@ class ScreenshotAnnotator {
         this.isMarkerStraight = e.target.checked;
         // マーカー使用中なら描画方式を即切り替え（フリーハンド⇔直線）
         if (this.currentTool === 'marker') this.enableMarkerMode();
+        this.saveColorSettings();
+      });
+    }
+
+    const markerOpacityPicker = document.getElementById('markerOpacityPicker');
+    if (markerOpacityPicker) {
+      markerOpacityPicker.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value);
+        this.markerOpacity = pct / 100;
+        const valEl = document.getElementById('markerOpacityValue');
+        if (valEl) valEl.textContent = pct + '%';
+        this.updateThicknessSliderBackground(e.target);
+        // 選択中のマーカーにも即反映
+        const targets = this.canvas.getActiveObjects().filter(o => o.isMarker);
+        if (targets.length) {
+          targets.forEach(o => o.set('opacity', this.markerOpacity));
+          this.canvas.renderAll();
+          this.saveState();
+        }
         this.saveColorSettings();
       });
     }
@@ -725,6 +745,7 @@ class ScreenshotAnnotator {
       path.evented = this.currentTool === 'select';
       path.strokeLineCap = 'round';
       path.strokeLineJoin = 'round';
+      path.set('opacity', this.markerOpacity);
       this.canvas.renderAll();
       this.saveState();
     });
@@ -733,18 +754,21 @@ class ScreenshotAnnotator {
       this.showLayerControls();
       this.updateVideoControlsVisibility();
       this.updateMosaicIntensityUI();
+      this.updateMarkerOpacityUI();
     });
 
     this.canvas.on('selection:updated', (e) => {
       this.showLayerControls();
       this.updateVideoControlsVisibility();
       this.updateMosaicIntensityUI();
+      this.updateMarkerOpacityUI();
     });
 
     this.canvas.on('selection:cleared', () => {
       this.hideLayerControls();
       this.hideVideoControls();
       this.updateMosaicIntensityUI();
+      this.updateMarkerOpacityUI();
     });
 
     this.canvas.on('object:selected', (e) => {
@@ -902,6 +926,36 @@ class ScreenshotAnnotator {
     if (markerStraightLabel) {
       markerStraightLabel.classList.toggle('context-disabled', tool !== 'marker');
     }
+
+    // 透明度スライダー: マーカーツール時／マーカー選択時のみ表示
+    this.updateMarkerOpacityUI();
+  }
+
+  // 透明度スライダーの表示切替と値同期（マーカー用）
+  updateMarkerOpacityUI() {
+    const group = document.getElementById('markerOpacityGroup');
+    const sep = document.getElementById('markerOpacitySeparator');
+    const picker = document.getElementById('markerOpacityPicker');
+    const valEl = document.getElementById('markerOpacityValue');
+    if (!group) return;
+
+    const active = this.canvas.getActiveObject();
+    const selectedMarker = !!(active && active.isMarker && this.currentTool === 'select');
+    const show = this.currentTool === 'marker' || selectedMarker;
+
+    group.style.display = show ? '' : 'none';
+    if (sep) sep.style.display = show ? '' : 'none';
+
+    if (show) {
+      let op = this.markerOpacity;
+      if (selectedMarker && typeof active.opacity === 'number') op = active.opacity;
+      const pct = Math.round(op * 100);
+      if (picker) {
+        picker.value = pct;
+        this.updateThicknessSliderBackground(picker);
+      }
+      if (valEl) valEl.textContent = pct + '%';
+    }
   }
 
   setTool(tool) {
@@ -983,6 +1037,7 @@ class ScreenshotAnnotator {
         strokeWidth: this.currentThickness,
         strokeLineCap: 'round',
         strokeUniform: true,
+        opacity: this.markerOpacity,
         selectable: false,
         evented: false,
         isMarker: true
@@ -1016,6 +1071,7 @@ class ScreenshotAnnotator {
         strokeWidth: this.currentThickness,
         strokeLineCap: 'round',
         strokeUniform: true,
+        opacity: this.markerOpacity,
         selectable: false,
         evented: false,
         isMarker: true
@@ -2548,6 +2604,7 @@ class ScreenshotAnnotator {
           isFillEnabled: this.isFillEnabled,
           rectCornerRadius: this.rectCornerRadius,
           isMarkerStraight: this.isMarkerStraight,
+          markerOpacity: this.markerOpacity,
           gradientStartColor: this.gradientStartColor,
           gradientEndColor: this.gradientEndColor,
           cropToggleOn: cropToggle ? cropToggle.checked : false,
@@ -2576,6 +2633,9 @@ class ScreenshotAnnotator {
           this.rectCornerRadius = result.colorSettings.rectCornerRadius;
         }
         this.isMarkerStraight = result.colorSettings.isMarkerStraight || false;
+        if (typeof result.colorSettings.markerOpacity === 'number') {
+          this.markerOpacity = Math.min(1, Math.max(0.1, result.colorSettings.markerOpacity));
+        }
         this.gradientStartColor = result.colorSettings.gradientStartColor || '#4285F4';
         this.gradientEndColor = result.colorSettings.gradientEndColor || '#ff52df';
 
@@ -2587,6 +2647,15 @@ class ScreenshotAnnotator {
 
         const markerStraightToggle = document.getElementById('markerStraightToggle');
         if (markerStraightToggle) markerStraightToggle.checked = this.isMarkerStraight;
+
+        const markerOpacityPicker = document.getElementById('markerOpacityPicker');
+        if (markerOpacityPicker) {
+          const opPct = Math.round(this.markerOpacity * 100);
+          markerOpacityPicker.value = opPct;
+          const opVal = document.getElementById('markerOpacityValue');
+          if (opVal) opVal.textContent = opPct + '%';
+          this.updateThicknessSliderBackground(markerOpacityPicker);
+        }
 
         const startPicker = document.getElementById('gradientStartPicker');
         const endPicker = document.getElementById('gradientEndPicker');
@@ -3248,7 +3317,7 @@ function showHelpModal() {
     '<li><strong>枠線（四角形） (R)</strong>: 四角形を描画</li>',
     '<li><strong>円・楕円 (C)</strong>: 円・楕円を描画</li>',
     '<li><strong>矢印 (A)</strong>: 矢印を描画</li>',
-    '<li><strong>マーカー (P)</strong>: フリーハンドで線を描画（太さ・色を変更可能）。「直線」トグルをONにすると水平・垂直の直線になります。</li>',
+    '<li><strong>マーカー (P)</strong>: フリーハンドで線を描画（太さ・色・透明度を変更可能）。「直線」トグルをONにすると水平・垂直の直線になります。透明度を下げると蛍光ペンのように使えます。</li>',
     '<li><strong>モザイク (M)</strong>: モザイク効果を適用</li>',
     '<li><strong>ステップマーカー</strong>: クリックで連番（①, ②...）を追加</li>',
     '</ul>',
@@ -3270,6 +3339,7 @@ function showHelpModal() {
     '<li><strong>塗りつぶし</strong>: ONにすると図形（四角形・円）を選択した色で塗りつぶします。選択中の図形にも即時反映されます。</li>',
     '<li><strong>角丸</strong>: 四角形の角を「丸角」と「直角」で切り替えます。選択中の四角形にも反映されます。</li>',
     '<li><strong>直線</strong>: マーカーツール選択時に表示。ONにするとマーカーが水平・垂直の直線になります（ドラッグ方向で自動判定）。</li>',
+    '<li><strong>透明度</strong>: マーカーツール選択時（またはマーカー選択中）に表示。マーカーの不透明度を10〜100%で調整できます。</li>',
     '<li><strong>太さ</strong>: 線の太さを1-10で調整</li>',
     '<li><strong>フォント</strong>: テキストサイズを調整</li>',
     '<li><strong>グラデーション</strong>: カラフルなグラデーション効果</li>',
