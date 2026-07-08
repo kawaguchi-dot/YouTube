@@ -109,6 +109,8 @@ class ScreenshotAnnotator {
     this.rectCornerRadius = 8;  // 四角形の角丸半径（0で直角）
     this.isMarkerStraight = false; // マーカーを水平・垂直の直線にするか
     this.markerOpacity = 1; // マーカーの不透明度（0〜1）
+    this.canvasBgColor = '#ffffff'; // キャンバスの背景色
+    this.objectClipboard = null; // オブジェクトのコピー用内部クリップボード
 
     this.stepCounter = 1;
 
@@ -236,7 +238,7 @@ class ScreenshotAnnotator {
     const handleConfirm = () => {
       this.applyCanvasSize(newValue);
       this.canvas.clear();
-      this.canvas.backgroundColor = '#ffffff';
+      this.canvas.backgroundColor = this.canvasBgColor;
       this.previousCanvasSize = newValue;
       // [改善2] 背景画像もクリア
       this.backgroundImageDataURL = null;
@@ -465,6 +467,18 @@ class ScreenshotAnnotator {
       });
     }
 
+    // 背景色セレクト
+    const bgColorSelect = document.getElementById('bgColorSelect');
+    if (bgColorSelect) {
+      bgColorSelect.addEventListener('change', (e) => {
+        this.canvasBgColor = e.target.value;
+        this.canvas.backgroundColor = this.canvasBgColor;
+        this.canvas.renderAll();
+        this.saveState();
+        this.saveColorSettings();
+      });
+    }
+
     // 範囲指定トグルの変更を保存
     const cropToggle = document.getElementById('cropToggle');
     if (cropToggle) {
@@ -546,6 +560,17 @@ class ScreenshotAnnotator {
         e.preventDefault();
         this.duplicateSelected();
         return;
+      }
+
+      // Ctrl/Cmd+C: 選択オブジェクト（文字枠など）を内部クリップボードにコピー
+      // ※テキスト編集中はブラウザの文字コピーに任せる
+      if (isCtrl && e.key.toLowerCase() === 'c' && !isTextEditing) {
+        const ao = this.canvas.getActiveObject();
+        if (ao) {
+          e.preventDefault();
+          this.copyObjectToClipboard();
+          return;
+        }
       }
 
       if (e.key === 'Escape' && this.isTextEditing) {
@@ -1833,6 +1858,7 @@ class ScreenshotAnnotator {
       return;
     }
 
+    let imagePasted = false;
     try {
       if (navigator.clipboard && navigator.clipboard.read) {
         const clipboardItems = await navigator.clipboard.read();
@@ -1859,6 +1885,7 @@ class ScreenshotAnnotator {
             e.preventDefault();
             const blob = item.getAsFile();
             await this.addImageFromBlob(blob);
+            imagePasted = true;
             break;
           }
         }
@@ -1866,6 +1893,72 @@ class ScreenshotAnnotator {
     } catch (error) {
       console.error('クリップボード貼り付けエラー:', error);
     }
+
+    // クリップボードに画像が無ければ、コピーした文字枠などのオブジェクトを貼り付ける
+    if (!imagePasted && this.objectClipboard && !this.isInTextEditingMode()) {
+      e.preventDefault();
+      this.pasteObjectFromClipboard();
+    }
+  }
+
+  // コピー対象のプロパティ一覧（複製・コピペで共通利用）
+  getCloneProps() {
+    return ['selectable', 'evented', 'arrowStart', 'arrowEnd', 'isMosaic', 'isVideo',
+      'isMarker', 'isStepMarker', 'mosaicOriginalDataURL', 'mosaicOriginalWidth',
+      'mosaicOriginalHeight', 'mosaicIntensity'];
+  }
+
+  // 選択オブジェクトを内部クリップボードにコピー（⌘/Ctrl+C）
+  copyObjectToClipboard() {
+    const active = this.canvas.getActiveObject();
+    if (!active) return;
+    active.clone((cloned) => {
+      this.objectClipboard = cloned;
+      this.showToast('コピーしました');
+    }, this.getCloneProps());
+  }
+
+  // 内部クリップボードのオブジェクトを貼り付け（⌘/Ctrl+V）
+  pasteObjectFromClipboard() {
+    if (!this.objectClipboard) return;
+    const OFFSET = 20;
+    this.objectClipboard.clone((clone) => {
+      this.canvas.discardActiveObject();
+
+      if (clone.type === 'activeSelection') {
+        clone.canvas = this.canvas;
+        clone.set({ left: clone.left + OFFSET, top: clone.top + OFFSET });
+        clone.forEachObject((obj) => {
+          obj.selectable = true;
+          obj.evented = true;
+          this.canvas.add(obj);
+        });
+        clone.setCoords();
+      } else {
+        clone.set({
+          left: clone.left + OFFSET,
+          top: clone.top + OFFSET,
+          selectable: true,
+          evented: true
+        });
+        this.canvas.add(clone);
+      }
+
+      if (clone.type === 'i-text') {
+        clone.isEditing = false;
+      }
+
+      // 連続貼り付けで少しずつずらす
+      this.objectClipboard.set({
+        left: this.objectClipboard.left + OFFSET,
+        top: this.objectClipboard.top + OFFSET
+      });
+
+      this.canvas.setActiveObject(clone);
+      this.canvas.requestRenderAll();
+      this.saveState();
+      this.showToast('貼り付けました');
+    }, this.getCloneProps());
   }
 
   handleFileSelect(e) {
@@ -2365,8 +2458,7 @@ class ScreenshotAnnotator {
       this.canvas.requestRenderAll();
       this.saveState();
       this.showToast('複製しました');
-    }, ['selectable', 'evented', 'arrowStart', 'arrowEnd', 'isMosaic', 'isVideo', 'isMarker', 'isStepMarker',
-        'mosaicOriginalDataURL', 'mosaicOriginalWidth', 'mosaicOriginalHeight', 'mosaicIntensity']);
+    }, this.getCloneProps());
   }
 
 
@@ -2605,6 +2697,7 @@ class ScreenshotAnnotator {
           rectCornerRadius: this.rectCornerRadius,
           isMarkerStraight: this.isMarkerStraight,
           markerOpacity: this.markerOpacity,
+          canvasBgColor: this.canvasBgColor,
           gradientStartColor: this.gradientStartColor,
           gradientEndColor: this.gradientEndColor,
           cropToggleOn: cropToggle ? cropToggle.checked : false,
@@ -2635,6 +2728,13 @@ class ScreenshotAnnotator {
         this.isMarkerStraight = result.colorSettings.isMarkerStraight || false;
         if (typeof result.colorSettings.markerOpacity === 'number') {
           this.markerOpacity = Math.min(1, Math.max(0.1, result.colorSettings.markerOpacity));
+        }
+        if (result.colorSettings.canvasBgColor) {
+          this.canvasBgColor = result.colorSettings.canvasBgColor;
+          this.canvas.backgroundColor = this.canvasBgColor;
+          const bgColorSelect = document.getElementById('bgColorSelect');
+          if (bgColorSelect) bgColorSelect.value = this.canvasBgColor;
+          this.canvas.renderAll();
         }
         this.gradientStartColor = result.colorSettings.gradientStartColor || '#4285F4';
         this.gradientEndColor = result.colorSettings.gradientEndColor || '#ff52df';
@@ -3273,7 +3373,7 @@ class ScreenshotAnnotator {
 
   clearCanvas() {
     this.canvas.clear();
-    this.canvas.backgroundColor = '#ffffff';
+    this.canvas.backgroundColor = this.canvasBgColor;
     this.canvas.renderAll();
 
     this.history = [];
@@ -3325,6 +3425,7 @@ function showHelpModal() {
     '<ul>',
     '<li><strong>テキストの書き換え</strong>: テキストをダブルクリックすると、その位置にカーソルが入り書き換えできます（全消えしません）。</li>',
     '<li><strong>複製</strong>: オブジェクトを右クリック →「複製」、または <code>Ctrl+D</code>。テキストボックスもコピーできます。</li>',
+    '<li><strong>コピー＆貼り付け</strong>: 文字枠などを選択して <code>Ctrl/⌘+C</code> でコピー → <code>Ctrl/⌘+V</code> で貼り付けできます。</li>',
     '</ul>',
     '<h4>動画コントロール</h4>',
     '<ul>',
@@ -3342,6 +3443,7 @@ function showHelpModal() {
     '<li><strong>透明度</strong>: マーカーツール選択時（またはマーカー選択中）に表示。マーカーの不透明度を10〜100%で調整できます。</li>',
     '<li><strong>太さ</strong>: 線の太さを1-10で調整</li>',
     '<li><strong>フォント</strong>: テキストサイズを調整</li>',
+    '<li><strong>背景</strong>: キャンバスの背景色を「白」または「薄いグレー」から選べます。</li>',
     '<li><strong>グラデーション</strong>: カラフルなグラデーション効果</li>',
     '</ul>',
     '<h4>レイヤー操作</h4>',
@@ -3370,6 +3472,7 @@ function showHelpModal() {
     '<li><code>Ctrl+Z</code>: 元に戻す</li>',
     '<li><code>Ctrl+Y</code>: やり直し</li>',
     '<li><code>Ctrl+D</code>: 選択したオブジェクトを複製</li>',
+    '<li><code>Ctrl/⌘+C</code> / <code>Ctrl/⌘+V</code>: 選択オブジェクトをコピー / 貼り付け</li>',
     '<li><code>Delete</code>: 選択したオブジェクトを削除</li>',
     '<li><code>Escape</code>: テキスト編集を終了</li>',
     '</ul>'
