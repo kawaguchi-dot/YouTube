@@ -57,17 +57,14 @@ body {
   align-items: center;
   flex-shrink: 0;
   height: 36px;
-  padding: 0 10px 0 4px;
-  margin-right: 2px;
+  padding: 0 6px 0 2px;
 }
 
-.brand-logo-text {
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 0.2px;
-  color: #1a1500;
-  white-space: nowrap;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+.brand-logo-mark {
+  height: 32px;
+  width: 32px;
+  object-fit: contain;
+  display: block;
 }
 
 /* ===== グループパネル（グラスモーフィズム） ===== */
