@@ -703,6 +703,31 @@ body {
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
+/* 16進カラー入力 */
+.hex-input {
+  width: 74px;
+  height: 22px;
+  margin-left: 5px;
+  padding: 0 6px;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.9);
+  color: #333;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.hex-input:focus {
+  outline: none;
+  border-color: #4285F4;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(66,133,244,0.25);
+}
+
 .color-picker::-webkit-color-swatch-wrapper {
   padding: 0;
   border: none;

@@ -357,6 +357,30 @@ class ScreenshotAnnotator {
     colorPickerEl.addEventListener('input', applyPickedColor);
     colorPickerEl.addEventListener('change', applyPickedColor);
 
+    // 16進数カラー入力
+    const hexInput = document.getElementById('hexColorInput');
+    if (hexInput) {
+      const applyHex = () => {
+        const norm = this.normalizeHex(hexInput.value);
+        if (norm) {
+          const active = this.canvas.getActiveObjects();
+          const targets = active.length
+            ? [...active]
+            : (this.canvas.getActiveObject() ? [this.canvas.getActiveObject()] : []);
+          this.setColor(norm, false, targets);
+          hexInput.value = norm;
+        }
+      };
+      hexInput.addEventListener('change', applyHex);
+      hexInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyHex();
+          hexInput.blur();
+        }
+      });
+    }
+
     document.getElementById('gradientStartPicker').addEventListener('input', (e) => {
       this.gradientStartColor = e.target.value;
       this.updateGradientButtonPreview();
@@ -1194,20 +1218,39 @@ class ScreenshotAnnotator {
     }
   }
 
+  // 16進カラー文字列を #RRGGBB（大文字）に正規化。不正なら null
+  normalizeHex(str) {
+    if (!str) return null;
+    let s = String(str).trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(s)) {
+      s = s.split('').map(c => c + c).join('');
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(s)) {
+      return '#' + s.toUpperCase();
+    }
+    return null;
+  }
+
   setColor(color, isGradient = false, targets = null) {
     this.currentColor = color;
     this.isGradient = isGradient;
 
     const colorPicker = document.getElementById('colorPicker');
     const gradientSettings = document.getElementById('gradientSettings');
+    const hexInput = document.getElementById('hexColorInput');
 
     if (isGradient) {
       colorPicker.style.display = 'none';
+      if (hexInput) hexInput.style.display = 'none';
       gradientSettings.style.display = 'flex';
     } else {
       colorPicker.style.display = 'block';
       gradientSettings.style.display = 'none';
       if (colorPicker) colorPicker.value = color;
+      if (hexInput) {
+        hexInput.style.display = '';
+        hexInput.value = this.normalizeHex(color) || color;
+      }
     }
 
     document.querySelectorAll('.color-preset').forEach(preset => {
@@ -3436,7 +3479,7 @@ function showHelpModal() {
     '</ul>',
     '<h4>色とスタイル</h4>',
     '<ul>',
-    '<li><strong>色選択</strong>: プリセット色またはカスタムカラー</li>',
+    '<li><strong>色選択</strong>: プリセット色（赤・青・緑・オレンジ・白）、カスタムカラー、または16進数（例 #000000）で指定できます。</li>',
     '<li><strong>塗りつぶし</strong>: ONにすると図形（四角形・円）を選択した色で塗りつぶします。選択中の図形にも即時反映されます。</li>',
     '<li><strong>角丸</strong>: 四角形の角を「丸角」と「直角」で切り替えます。選択中の四角形にも反映されます。</li>',
     '<li><strong>直線</strong>: マーカーツール選択時に表示。ONにするとマーカーが水平・垂直の直線になります（ドラッグ方向で自動判定）。</li>',

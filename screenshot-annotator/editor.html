@@ -77,11 +77,14 @@
         <label class="color-label">色:</label>
         <div class="color-presets">
           <button class="color-preset" data-color="#FF0000" style="background-color: #FF0000;" title="赤"></button>
+          <button class="color-preset" data-color="#2563EB" style="background-color: #2563EB;" title="青"></button>
+          <button class="color-preset" data-color="#16A34A" style="background-color: #16A34A;" title="緑"></button>
+          <button class="color-preset" data-color="#FF9800" style="background-color: #FF9800;" title="オレンジ"></button>
           <button class="color-preset" data-color="#FFFFFF" style="background-color: #FFFFFF; border: 1px solid #ccc;" title="白"></button>
-          <button class="color-preset" data-color="#333333" style="background-color: #333333;" title="黒"></button>
           <button class="color-preset gradient" id="gradientPresetBtn" data-gradient="true" style="background: linear-gradient(45deg, #4285F4, #ff52df);" title="グラデーション"></button>
         </div>
         <input type="color" id="colorPicker" class="color-picker" title="カスタムカラー">
+        <input type="text" id="hexColorInput" class="hex-input" maxlength="7" placeholder="#000000" title="16進数で色を入力（例: #000000）" spellcheck="false">
         <div id="gradientSettings" style="display: none; align-items: center; margin-left: 10px; gap: 5px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 10px;">
           <span style="font-size: 11px; color: #4a3d00;">Start</span>
           <input type="color" id="gradientStartPicker" class="color-picker small" value="#4285F4" title="開始色">
