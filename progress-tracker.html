@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube進捗管理表</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #37352f; --muted: #9b9a97; --line: #ececeb; --hover: #f7f7f5;
+    --accent: #2383e2; --danger: #e03e3e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif; color: var(--fg); background: var(--bg); font-size: 14px; }
+  header { padding: 20px 24px 8px; }
+  h1 { font-size: 24px; margin: 0 0 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 24px 12px; }
+  .toolbar select, .toolbar input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: #fff; }
+  button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
+  button:hover { background: var(--hover); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: .9; }
+  button.danger { color: var(--danger); }
+  .summary { display: flex; gap: 12px; flex-wrap: wrap; padding: 0 24px 12px; color: var(--muted); font-size: 13px; }
+  .wrap { overflow-x: auto; padding: 0 24px 40px; }
+  table { border-collapse: collapse; min-width: 1300px; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 7px 8px; text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; background: #fff; position: sticky; top: 0; cursor: pointer; user-select: none; }
+  tbody tr:hover { background: var(--hover); }
+  td.title { max-width: 380px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  td.title:hover { text-decoration: underline; }
+  td.url a { color: var(--muted); max-width: 120px; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  .client { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  td select.inline { border: none; background: transparent; font-size: 13px; padding: 1px 4px; border-radius: 4px; cursor: pointer; }
+  .overdue { color: var(--danger); font-weight: 600; }
+  .soon { color: #d9730d; font-weight: 600; }
+  .done-row { opacity: .55; }
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(15,15,15,.4); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 560px; max-width: 100%; max-height: 90vh; overflow-y: auto; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .modal h2 { margin: 0 0 16px; font-size: 18px; }
+  .form-grid { display: grid; grid-template-columns: 120px 1fr; gap: 10px 12px; align-items: center; }
+  .form-grid label { color: var(--muted); font-size: 13px; }
+  .form-grid input, .form-grid select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+  .modal-actions { display: flex; justify-content: space-between; margin-top: 18px; }
+  .modal-actions div { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📺 YouTube進捗管理表</h1>
+</header>
+
+<div class="toolbar">
+  <button class="primary" id="addBtn">＋ 新規追加</button>
+  <input type="search" id="search" placeholder="タイトル・顧客で検索">
+  <select id="fStatus"><option value="">進捗: すべて</option></select>
+  <select id="fEditor"><option value="">編集担当: すべて</option></select>
+  <select id="fClient"><option value="">顧客: すべて</option></select>
+  <label><input type="checkbox" id="hideDone"> 公開済を隠す</label>
+  <span style="flex:1"></span>
+  <button id="exportBtn">CSV出力</button>
+  <button id="jsonExport">バックアップ</button>
+  <button id="jsonImport">復元</button>
+  <input type="file" id="importFile" accept=".json" hidden>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<div class="wrap">
+  <table>
+    <thead>
+      <tr>
+        <th data-sort="client">顧客</th>
+        <th data-sort="title">プロジェクト名（動画タイトル）</th>
+        <th data-sort="status">進捗</th>
+        <th data-sort="editor">編集担当</th>
+        <th data-sort="publishDate">公開日</th>
+        <th>曜</th>
+        <th data-sort="editDue">編集納期</th>
+        <th>曜</th>
+        <th>台本</th>
+        <th>素材尺</th>
+        <th>gigafile便URL</th>
+        <th data-sort="thumbDue">サムネ納期</th>
+        <th>締切までに完了</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalTitle">案件を編集</h2>
+    <form id="form" class="form-grid">
+      <label>顧客</label><input name="client" list="clientList" required>
+      <label>プロジェクト名</label><input name="title" required>
+      <label>進捗</label><select name="status"></select>
+      <label>編集担当</label><input name="editor" list="editorList">
+      <label>公開日</label><input type="date" name="publishDate">
+      <label>編集納期</label><input type="date" name="editDue">
+      <label>台本</label><input name="script" placeholder="URL または メモ">
+      <label>素材尺</label><input name="duration" placeholder="例: 12:17">
+      <label>gigafile便URL</label><input name="gigafile" placeholder="https://...">
+      <label>サムネ納期</label><input type="date" name="thumbDue">
+      <label>締切までに完了</label><input type="checkbox" name="done" style="width:auto">
+    </form>
+    <datalist id="clientList"></datalist>
+    <datalist id="editorList"></datalist>
+    <div class="modal-actions">
+      <button class="danger" id="deleteBtn">削除</button>
+      <div>
+        <button id="cancelBtn">キャンセル</button>
+        <button class="primary" id="saveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'youtube-progress-tracker-v1';
+const WEEK = ['日','月','火','水','木','金','土'];
+
+const STATUSES = [
+  { name: '未着手',       bg: '#e9e9e7', fg: '#37352f' },
+  { name: '台本作成中',   bg: '#fdecc8', fg: '#402c1b' },
+  { name: '編集中',       bg: '#d3e5ef', fg: '#183347' },
+  { name: '確認中(顧客)', bg: '#cfe3fa', fg: '#1b3a5c' },
+  { name: '修正中',       bg: '#ffe2dd', fg: '#5d1715' },
+  { name: 'アップロード済', bg: '#fbeeb8', fg: '#5c4a00' },
+  { name: '公開済',       bg: '#ffd8d6', fg: '#b42318' },
+];
+const EDITOR_COLORS = ['#dbeddb', '#f5e0e9', '#e8deee', '#fadec9', '#d3e5ef'];
+const EDITOR_FG     = ['#1c3829', '#4c2337', '#412454', '#49290e', '#183347'];
+const CLIENT_COLORS = ['#a0764b', '#e03e3e', '#9065b0', '#448361', '#337ea9', '#d9730d', '#c14c8a'];
+
+const SAMPLE = [
+  ['日興住宅','2609-4L｜【東海市】実家じまい実例《前編》','公開済','大岡','2026-09-25','2026-09-18'],
+  ['国松工務店','2609-4S｜《ブログ》階段下スペースをおしゃれに有効活用','公開済','川口','2026-09-25','2026-09-18'],
+  ['林MS','2609-5S｜【社長必見】売上を増やす前に、バケツの穴を塞げ','アップロード済','大岡','2026-09-29','2026-09-22','https://docs.google.com/'],
+  ['林MS (競馬)','2609-4S｜理論｜原稿４（『トラックバイアス』を制する）','アップロード済','川口','2026-09-30','2026-09-24'],
+  ['日興住宅','2610-1S｜【東海市】実家じまい実例《前編》切り抜き','アップロード済','川口','2026-10-02','2026-09-25'],
+  ['国松工務店','2610-1L｜ローンシミュレーション','未着手','大岡','2026-10-02','2026-09-25'],
+  ['林MS','2610-1L｜【建設業必見】月次決算が締められない？そこに潜む問題','未着手','大岡','2026-10-06','2026-09-29','https://docs.google.com/','12:17'],
+  ['中村崇春','2610-1S｜避難行動について','未着手','大岡','2026-10-06','','あり'],
+  ['林MS (競馬)','2610-1S｜理論｜原稿５（『条件の合う馬』を狙え！）','確認中(顧客)','川口','2026-10-07','2026-09-30','https://docs.google.com/'],
+  ['日興住宅','2610-2L｜【東海市】実家じまい実例《後編》','未着手','大岡','2026-10-09','2026-10-02'],
+  ['国松工務店','2610-2S｜《ブログ》名古屋市で地震に強い地域とは｜エリア別解説','未着手','川口','2026-10-09','2026-10-02'],
+  ['林MS','2610-2S｜【社長必見】借入金の金利上昇を過度に恐れるな','未着手','大岡','2026-10-13','2026-10-06','https://docs.google.com/'],
+  ['日興住宅','2610-1｜AI動画｜動画名','未着手','川口','2026-10-14',''],
+  ['日興住宅','2610-3S｜【東海市】実家じまい実例《後編》切り抜き','未着手','川口','2026-10-16','2026-10-09'],
+  ['国松工務店','2610-3L｜【港区】ルームツアー','未着手','大岡','2026-10-16','2026-10-09'],
+  ['中村崇春','2610-2S｜とこなめ防災とデジタルハザードマップについて','未着手','大岡','2026-10-20',''],
+  ['林MS','2610-3S｜【社長必見】成功に再現性はありません(原稿1)','未着手','大岡','2026-10-20','2026-10-13','https://docs.google.com/'],
+  ['有電','【未撮影】2610-1M｜YouTube集大成','未着手','','2026-10-23',''],
+].map((r, i) => ({
+  id: 'id' + i, client: r[0], title: r[1], status: r[2], editor: r[3],
+  publishDate: r[4], editDue: r[5], script: r[6] || '', duration: r[7] || '',
+  gigafile: '', thumbDue: '', done: false,
+}));
+
+let items = load();
+let sortKey = 'publishDate', sortAsc = true;
+let editingId = null;
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return SAMPLE;
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch (e) {}
+}
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function hashIndex(str, n) {
+  let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % n;
+}
+function fmtDate(d) { return d ? d.replaceAll('-', '/') : ''; }
+function weekday(d) { return d ? WEEK[new Date(d + 'T00:00:00').getDay()] : ''; }
+function daysFromToday(d) {
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((new Date(d + 'T00:00:00') - t) / 86400000);
+}
+function dueClass(d, item) {
+  if (!d || item.status === '公開済' || item.status === 'アップロード済' || item.done) return '';
+  const n = daysFromToday(d);
+  if (n < 0) return 'overdue';
+  if (n <= 3) return 'soon';
+  return '';
+}
+function statusStyle(name) {
+  const s = STATUSES.find(x => x.name === name) || STATUSES[0];
+  return `background:${s.bg};color:${s.fg}`;
+}
+function editorTag(name) {
+  if (!name) return '';
+  const i = hashIndex(name, EDITOR_COLORS.length);
+  return `<span class="tag" style="background:${EDITOR_COLORS[i]};color:${EDITOR_FG[i]}">${esc(name)}</span>`;
+}
+function cellText(v) {
+  if (!v) return '';
+  if (/^https?:\/\//.test(v)) return `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>`;
+  return esc(v);
+}
+
+function uniq(key) { return [...new Set(items.map(i => i[key]).filter(Boolean))].sort(); }
+
+function refreshFilters() {
+  const fill = (sel, values, label) => {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${label}: すべて</option>` + values.map(v => `<option>${esc(v)}</option>`).join('');
+    sel.value = values.includes(cur) ? cur : '';
+  };
+  fill($('#fStatus'), STATUSES.map(s => s.name), '進捗');
+  fill($('#fEditor'), uniq('editor'), '編集担当');
+  fill($('#fClient'), uniq('client'), '顧客');
+  $('#clientList').innerHTML = uniq('client').map(v => `<option value="${esc(v)}">`).join('');
+  $('#editorList').innerHTML = uniq('editor').map(v => `<option value="${esc(v)}">`).join('');
+}
+
+function filtered() {
+  const q = $('#search').value.trim().toLowerCase();
+  const fs = $('#fStatus').value, fe = $('#fEditor').value, fc = $('#fClient').value;
+  const hideDone = $('#hideDone').checked;
+  return items.filter(i =>
+    (!q || (i.title + i.client).toLowerCase().includes(q)) &&
+    (!fs || i.status === fs) && (!fe || i.editor === fe) && (!fc || i.client === fc) &&
+    (!hideDone || i.status !== '公開済')
+  ).sort((a, b) => {
+    const x = a[sortKey] || '￿', y = b[sortKey] || '￿';
+    return (x < y ? -1 : x > y ? 1 : 0) * (sortAsc ? 1 : -1);
+  });
+}
+
+function render() {
+  const rows = filtered();
+  $('#tbody').innerHTML = rows.map(i => {
+    const color = CLIENT_COLORS[hashIndex(i.client, CLIENT_COLORS.length)];
+    const statusOpts = STATUSES.map(s => `<option ${s.name === i.status ? 'selected' : ''}>${s.name}</option>`).join('');
+    return `<tr data-id="${i.id}" class="${i.status === '公開済' ? 'done-row' : ''}">
+      <td><span class="client"><span class="dot" style="background:${color}"></span>${esc(i.client)}</span></td>
+      <td class="title" title="${esc(i.title)}">${esc(i.title)}</td>
+      <td><select class="inline status-sel" style="${statusStyle(i.status)}">${statusOpts}</select></td>
+      <td>${editorTag(i.editor)}</td>
+      <td class="${dueClass(i.publishDate, i)}">${fmtDate(i.publishDate)}</td>
+      <td>${weekday(i.publishDate)}</td>
+      <td class="${dueClass(i.editDue, i)}">${fmtDate(i.editDue)}</td>
+      <td>${weekday(i.editDue)}</td>
+      <td class="url">${cellText(i.script)}</td>
+      <td>${esc(i.duration)}</td>
+      <td class="url">${cellText(i.gigafile)}</td>
+      <td class="${dueClass(i.thumbDue, i)}">${fmtDate(i.thumbDue)}</td>
+      <td style="text-align:center"><input type="checkbox" class="done-chk" ${i.done ? 'checked' : ''}></td>
+    </tr>`;
+  }).join('');
+
+  const counts = STATUSES.map(s => [s.name, items.filter(i => i.status === s.name).length]).filter(c => c[1]);
+  const overdue = items.filter(i => dueClass(i.editDue, i) === 'overdue').length;
+  $('#summary').innerHTML =
+    `<span>全 ${items.length} 件（表示 ${rows.length} 件）</span>` +
+    counts.map(([n, c]) => `<span><span class="tag" style="${statusStyle(n)}">${n}</span> ${c}</span>`).join('') +
+    (overdue ? `<span class="overdue">⚠ 編集納期超過 ${overdue} 件</span>` : '');
+
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.sort === sortKey ? (sortAsc ? ' ▲' : ' ▼') : '');
+  });
+}
+
+// ---- table events ----
+$('#tbody').addEventListener('change', e => {
+  const id = e.target.closest('tr').dataset.id;
+  const item = items.find(i => i.id === id);
+  if (e.target.classList.contains('status-sel')) item.status = e.target.value;
+  if (e.target.classList.contains('done-chk')) item.done = e.target.checked;
+  save(); render();
+});
+$('#tbody').addEventListener('click', e => {
+  if (e.target.closest('td.title')) openModal(e.target.closest('tr').dataset.id);
+});
+document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
+  if (sortKey === th.dataset.sort) sortAsc = !sortAsc; else { sortKey = th.dataset.sort; sortAsc = true; }
+  render();
+}));
+['#search', '#fStatus', '#fEditor', '#fClient', '#hideDone'].forEach(s => $(s).addEventListener('input', render));
+
+// ---- modal ----
+const form = $('#form');
+form.status.innerHTML = STATUSES.map(s => `<option>${s.name}</option>`).join('');
+
+function openModal(id) {
+  editingId = id;
+  const item = items.find(i => i.id === id) || { status: '未着手' };
+  $('#modalTitle').textContent = id ? '案件を編集' : '新規案件を追加';
+  $('#deleteBtn').style.visibility = id ? 'visible' : 'hidden';
+  for (const el of form.elements) {
+    if (el.type === 'checkbox') el.checked = !!item[el.name];
+    else el.value = item[el.name] || '';
+  }
+  $('#modalBg').classList.add('open');
+  form.client.focus();
+}
+function closeModal() { $('#modalBg').classList.remove('open'); editingId = null; }
+
+$('#addBtn').onclick = () => openModal(null);
+$('#cancelBtn').onclick = closeModal;
+$('#modalBg').addEventListener('click', e => { if (e.target.id === 'modalBg') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+$('#saveBtn').onclick = () => {
+  if (!form.reportValidity()) return;
+  const data = {};
+  for (const el of form.elements) data[el.name] = el.type === 'checkbox' ? el.checked : el.value.trim();
+  if (editingId) Object.assign(items.find(i => i.id === editingId), data);
+  else items.push({ id: 'id' + Date.now(), ...data });
+  save(); refreshFilters(); render(); closeModal();
+};
+$('#deleteBtn').onclick = () => {
+  if (!confirm('この案件を削除しますか？')) return;
+  items = items.filter(i => i.id !== editingId);
+  save(); refreshFilters(); render(); closeModal();
+};
+
+// ---- export / import ----
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('#exportBtn').onclick = () => {
+  const cols = [['client','顧客'],['title','プロジェクト名'],['status','進捗'],['editor','編集担当'],['publishDate','公開日'],
+    ['editDue','編集納期'],['script','台本'],['duration','素材尺'],['gigafile','gigafile便URL'],['thumbDue','サムネ納期'],['done','締切までに完了']];
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [cols.map(c => q(c[1])).join(',')]
+    .concat(filtered().map(i => cols.map(c => q(i[c[0]])).join(','))).join('\r\n');
+  download('youtube_progress.csv', '﻿' + csv, 'text/csv');
+};
+$('#jsonExport').onclick = () => download('youtube_progress_backup.json', JSON.stringify(items, null, 2), 'application/json');
+$('#jsonImport').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data)) throw new Error();
+    items = data; save(); refreshFilters(); render();
+  } catch { alert('JSONファイルを読み込めませんでした'); }
+  e.target.value = '';
+};
+
+refreshFilters();
+render();
+</script>
+</body>
+</html>
