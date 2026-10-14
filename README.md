@@ -37,6 +37,7 @@ pip install -r requirements.txt
 ├── requirements.txt     # 依存パッケージ一覧
 ├── client_secrets.json  # Google OAuth2 クライアントシークレット（要配置）
 ├── token.json           # 認証トークン（初回認証後に自動生成）
+├── .gitignore           # 認証情報・動画ファイルを除外
 └── README.md            # このファイル
 ```
 
@@ -99,11 +100,7 @@ YouTube 自動アップロードスクリプト
 ## 注意事項
 
 - `client_secrets.json` と `token.json` は **絶対に公開リポジトリにアップロードしない**でください
-- `.gitignore` に以下を追加することを推奨します:
-  ```
-  client_secrets.json
-  token.json
-  ```
+- リポジトリ同梱の `.gitignore` で `client_secrets.json`・`token.json`・動画ファイルは除外済みです
 - YouTube Data API v3 には1日あたりのクォータ制限（10,000ユニット）があります
 - 動画アップロードには約1,600ユニット消費されます
 

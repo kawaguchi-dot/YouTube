@@ -1,0 +1,21 @@
+# 認証情報（絶対にコミットしない）
+client_secrets.json
+client_secret*.json
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 動画ファイル
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# OS
+.DS_Store
+Thumbs.db
